@@ -7,6 +7,7 @@ from habr_parser import get_article_by_flow
 from aiogram.utils.markdown import hlink
 from config import TOKEN
 
+
 #TOKEN = ""
 
 bot = telebot.TeleBot(TOKEN)
@@ -80,7 +81,6 @@ def welcome(message):
     bot.register_next_step_handler(message, save_username)
 
 
-
 def save_username(message):
     chat_id = message.chat.id
     name = message.text
@@ -108,17 +108,25 @@ def save_description(message):
     bot.register_next_step_handler(message, save_contact)
 
 
-def save_contact(message):
+def save_contact(message, **fields):
     chat_id = message.chat.id
     contact = message.text
     users["contact"] = contact
     bot.send_message(chat_id,
                      f'Спасибо за информацию. Мы стараемся стать лучше для Вас!')
 
-    with open("complaints.json", "w", encoding="utf-8") as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
 
-#сделать сохранение джсона списка через чат айди см джсон файл
-#сделать файл конфига для токена бот
+    try:
+        with open("complaints.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError):
+        data = {}
+
+    data.setdefault(str(chat_id), users).update(fields)
+
+    with open("complaints.json", "a", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+#исправить кривое сохранение в джос
 
 bot.polling()
