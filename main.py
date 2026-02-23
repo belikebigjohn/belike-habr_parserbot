@@ -5,8 +5,9 @@ import json
 from habr_parser import get_first_article
 from habr_parser import get_article_by_flow
 from aiogram.utils.markdown import hlink
+from config import TOKEN
 
-TOKEN = "8430093365:AAEt-yI_SA6mvECaZuuol3LNTJlg7FelUr8"
+#TOKEN = ""
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -37,11 +38,9 @@ flows = ("backend", "frontend", "admin", "information_security",
          "popsci", "develop")
 
 
-# доделал нахождение ссылки первой статьи на потоке
-@bot.message_handler(regexp=r'^New article \|')
+@bot.message_handler(regexp=r'^New article |')
 def handle_new_article(message):
     handle_first_article(message)
-
 
 @bot.message_handler(func=lambda message: message.text == "По потокам")
 def show_flow_buttons(message):
@@ -60,7 +59,6 @@ def show_flow_buttons(message):
         reply_markup=keyboard
     )
 
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith("flow:"))
 def send_article_from_flow(call):
     flow = call.data.split(":", 1)[1]
@@ -74,5 +72,57 @@ def send_article_from_flow(call):
 
     bot.answer_callback_query(call.id)
 
+
+users = {}
+
+@bot.message_handler(commands=['complaint'])
+def welcome(message):
+    chat_id = message.chat.id
+    users["chat_id"] = chat_id
+    bot.send_message(chat_id,
+                     'Вы заполняете форму обратной связи\жалобы \nВведите своё имя:')
+    bot.register_next_step_handler(message, save_username)
+
+def save_username(message):
+    chat_id = message.chat.id
+    name = message.text
+    users["name"] = name
+    bot.send_message(chat_id,
+                     f'Отлично, {name}.\nТеперь укажите на каком этапе возникла ошибка:')
+    bot.register_next_step_handler(message, save_stage)
+
+def save_stage(message):
+    chat_id = message.chat.id
+    stage = message.text
+    users["stage"] = stage
+    bot.send_message(chat_id,
+                     f'Хорошо,\nТеперь опишите проблему:')
+    bot.register_next_step_handler(message, save_description)
+
+
+def save_description(message):
+    chat_id = message.chat.id
+    description = message.text
+    users["description"] = description
+    bot.send_message(chat_id,
+                     f'Почти готово,\nУкажите ваши контактные данные:')
+    bot.register_next_step_handler(message, save_contact)
+
+
+def save_contact(message):
+    chat_id = message.chat.id
+    contact = message.text
+    users["contact"] = contact
+    bot.send_message(chat_id,
+                     f'Спасибо за информацию. Мы стараемся стать лучше для Вас!')
+
+    with open("complaints.json", "w", encoding="utf-8") as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
+
+    print(users)
+
+
+#сделать созхранение джсона списка через чат айди см джрн файл
+#сделать файл конфига для токена бот
 
 bot.polling()
