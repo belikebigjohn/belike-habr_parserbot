@@ -35,7 +35,7 @@ flows = ("backend", "frontend", "admin", "information_security",
          "popsci", "develop")
 
 # доделал нахождение ссылки первой статьи на потоке
-@bot.message_handler(regexp=r'^New article |')
+@bot.message_handler(regexp=r'^New article \|')
 def handle_new_article(message):
     handle_first_article(message)
 
