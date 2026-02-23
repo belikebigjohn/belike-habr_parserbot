@@ -11,13 +11,11 @@ from config import TOKEN
 
 bot = telebot.TeleBot(TOKEN)
 
-
 # article_and_url = hlink(get_first_article())
 
 @bot.message_handler(commands=['first_article'])
 def handle_first_article(message):
     bot.send_message(message.chat.id, get_first_article(), parse_mode='HTML')
-
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
@@ -32,12 +30,11 @@ def handle_start(message):
     bot.send_message(message.chat.id, "Hi there! I`m a Habr parser bot.\n"
                                       "Enter /first_article for the hottest news from IT`s world", reply_markup=murkup)
 
-
 flows = ("backend", "frontend", "admin", "information_security",
          "gamedev", "ai_and_ml", "design", "management", "marketing",
          "popsci", "develop")
 
-
+# доделал нахождение ссылки первой статьи на потоке
 @bot.message_handler(regexp=r'^New article |')
 def handle_new_article(message):
     handle_first_article(message)
@@ -72,7 +69,6 @@ def send_article_from_flow(call):
 
     bot.answer_callback_query(call.id)
 
-
 users = {}
 
 @bot.message_handler(commands=['complaint'])
@@ -83,6 +79,8 @@ def welcome(message):
                      'Вы заполняете форму обратной связи\жалобы \nВведите своё имя:')
     bot.register_next_step_handler(message, save_username)
 
+
+
 def save_username(message):
     chat_id = message.chat.id
     name = message.text
@@ -90,6 +88,7 @@ def save_username(message):
     bot.send_message(chat_id,
                      f'Отлично, {name}.\nТеперь укажите на каком этапе возникла ошибка:')
     bot.register_next_step_handler(message, save_stage)
+
 
 def save_stage(message):
     chat_id = message.chat.id
@@ -119,10 +118,7 @@ def save_contact(message):
     with open("complaints.json", "w", encoding="utf-8") as f:
         json.dump(users, f, ensure_ascii=False, indent=2)
 
-    print(users)
-
-
-#сделать созхранение джсона списка через чат айди см джрн файл
+#сделать сохранение джсона списка через чат айди см джсон файл
 #сделать файл конфига для токена бот
 
 bot.polling()
