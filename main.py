@@ -1,7 +1,9 @@
 import telebot
+from pyexpat.errors import messages
 from telebot import types
 import datetime as dt
 import json
+
 from habr_parser import get_first_article
 from habr_parser import get_article_by_flow
 from aiogram.utils.markdown import hlink
@@ -10,22 +12,26 @@ from config import TOKEN
 
 #TOKEN = ""
 
+FILENAME = "complaints.json"
+
 bot = telebot.TeleBot(TOKEN)
 
 # article_and_url = hlink(get_first_article())
 
+# ============= ОБРАБОТЧИКИ =============
+
 @bot.message_handler(commands=['first_article'])
 def handle_first_article(message):
-    bot.send_message(message.chat.id, get_first_article(), parse_mode='HTML')
+    bot.send_message(message.chat.id, get_first_article(message), parse_mode='HTML')
+
+now = dt.datetime.now()
+realtime = f"{now.date()} ; {now.hour}:{now.minute}"
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
-    now = dt.datetime.now()
-    realtime = f"{now.date()} ; {now.hour}:{now.minute}"
-
     murkup = types.ReplyKeyboardMarkup()
     b1 = types.KeyboardButton(f"New article | {realtime}")
-    bflow = types.KeyboardButton("По потокам")
+    bflow = types.KeyboardButton("По потокам") #button flow
     murkup.add(b1, bflow)
 
     bot.send_message(message.chat.id, "Hi there! I`m a Habr parser bot.\n"
@@ -39,6 +45,10 @@ flows = ("backend", "frontend", "admin", "information_security",
 @bot.message_handler(regexp=r'^New article \|')
 def handle_new_article(message):
     handle_first_article(message)
+
+
+
+# ============= СВЯЗКИ =============
 
 @bot.message_handler(func=lambda message: message.text == "По потокам")
 def show_flow_buttons(message):
@@ -61,7 +71,7 @@ def show_flow_buttons(message):
 def send_article_from_flow(call):
     flow = call.data.split(":", 1)[1]
 
-    article_text = get_article_by_flow(flow)
+    article_text  = get_article_by_flow(flow, call)
 
     if article_text:
         bot.send_message(call.message.chat.id, article_text, parse_mode="HTML")
@@ -70,62 +80,89 @@ def send_article_from_flow(call):
 
     bot.answer_callback_query(call.id)
 
+# ============= ЖАЛОБЫ =============
 users = {}
 
 @bot.message_handler(commands=['complaint'])
-def welcome(message):
+def start_complaint(message):
     chat_id = message.chat.id
-    users["chat_id"] = chat_id
-    bot.send_message(chat_id,
-                     'Вы заполняете форму обратной связи\жалобы \nВведите своё имя:')
-    bot.register_next_step_handler(message, save_username)
+    users[chat_id] = {}
+    bot.send_message(
+        chat_id,
+        "Вы заполняете форму обратной связи / жалобы.\n\nВведите своё имя:"
+    )
+    bot.register_next_step_handler(message, process_name)
 
 
-def save_username(message):
+def process_name(message):
     chat_id = message.chat.id
-    name = message.text
-    users["name"] = name
-    bot.send_message(chat_id,
-                     f'Отлично, {name}.\nТеперь укажите на каком этапе возникла ошибка:')
-    bot.register_next_step_handler(message, save_stage)
+    if chat_id not in users:
+        return bot.send_message(chat_id, "Сессия завершена. Начните заново: /complaint")
+
+    users[chat_id]["name"] = message.text.strip()
+    bot.send_message(chat_id, f"Отлично, {users[chat_id]['name']}.\nНа каком этапе возникла проблема?")
+    bot.register_next_step_handler(message, process_stage)
 
 
-def save_stage(message):
+def process_stage(message):
     chat_id = message.chat.id
-    stage = message.text
-    users["stage"] = stage
-    bot.send_message(chat_id,
-                     f'Хорошо,\nТеперь опишите проблему:')
-    bot.register_next_step_handler(message, save_description)
+    if chat_id not in users: return
+    users[chat_id]["stage"] = message.text.strip()
+    bot.send_message(chat_id, "Хорошо.\nОпишите проблему подробнее:")
+    bot.register_next_step_handler(message, process_description)
 
 
-def save_description(message):
+def process_description(message):
     chat_id = message.chat.id
-    description = message.text
-    users["description"] = description
-    bot.send_message(chat_id,
-                     f'Почти готово,\nУкажите ваши контактные данные:')
-    bot.register_next_step_handler(message, save_contact)
+    if chat_id not in users: return
+    users[chat_id]["description"] = message.text.strip()
+    bot.send_message(chat_id, "Почти готово\nУкажите контактные данные (telegram, email и т.п.):")
+    bot.register_next_step_handler(message, save_complaint)
 
 
-def save_contact(message, **fields):
+def save_complaint(message):
     chat_id = message.chat.id
-    contact = message.text
-    users["contact"] = contact
-    bot.send_message(chat_id,
-                     f'Спасибо за информацию. Мы стараемся стать лучше для Вас!')
+    if chat_id not in users:
+        return bot.send_message(chat_id, "Сессия завершена.")
 
+    contact = message.text.strip()
 
+    complaint = {
+        "name": users[chat_id].get("name", ""),
+        "stage": users[chat_id].get("stage", ""),
+        "description": users[chat_id].get("description", ""),
+        "contact": contact,
+        "timestamp": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    # чтение
     try:
-        with open("complaints.json", "r", encoding="utf-8") as f:
+        with open(FILENAME, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except (FileNotFoundError):
+    except (FileNotFoundError, json.JSONDecodeError):
         data = {}
 
-    data.setdefault(str(chat_id), users).update(fields)
+    # добавление в список
+    str_chat_id = str(chat_id)
+    if str_chat_id not in data:
+        data[str_chat_id] = []
 
-    with open("complaints.json", "a", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    data[str_chat_id].append(complaint)
+
+    # запись
+    try:
+        with open(FILENAME, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        bot.send_message(chat_id, "Спасибо за информацию. Мы стараемся стать лучше для Вас!")
+
+        # удаляем временные данные
+        del users[chat_id]
+
+    except Exception as e:
+        bot.send_message(chat_id, f"Не удалось сохранить, {e}")
+        print(f"Ошибка сохранения {chat_id}: {e}")
+
 
 #исправить кривое сохранение в джос
 

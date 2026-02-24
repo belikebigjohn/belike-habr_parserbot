@@ -7,14 +7,14 @@ headers = {
 }
 
 
-def get_first_article(habr_url="https://habr.com"):
+def get_first_article(message):
     habr_url = "https://habr.com"
     response = rq.get(habr_url, headers=headers)
     soup = BeautifulSoup(response.text, 'html.parser')
 
     # проверяем, зашли ли мы на сайт
     if response.status_code == 200:
-        print("получаем информацию/ get_first_article()")
+        print(f"получаем информацию/ get_first_article()/ для {message.chat.username} ; {message.chat.id}")
     else:
         print('error/get_first_article()')
 
@@ -37,7 +37,7 @@ flows = ("backend", "frontend", "admin", "information_security",
          "popsci", "develop")
 
 
-def get_article_by_flow(flow):
+def get_article_by_flow(flow, call):
     habr_flows_url = "https://habr.com/flows/"
     habr_url = "https://habr.com"
     flow_url = habr_flows_url + flow
@@ -46,7 +46,8 @@ def get_article_by_flow(flow):
 
     # проверяем, зашли ли мы на сайт
     if response.status_code == 200:
-        print("получаем информацию/ get_article_by_flow()")
+        print(f"получаем информацию/ get_article_by_flow()/ для "
+              f"{call.message.chat.username} ; {call.message.chat.id}")
     else:
         print('error/get_article_by_flow()')
 
@@ -58,7 +59,6 @@ def get_article_by_flow(flow):
         full_url = habr_url + first_article_url
 
         article_and_url = hlink(first_article_title, full_url)
-        print(full_url)
         return article_and_url
 
     except Exception as e:
